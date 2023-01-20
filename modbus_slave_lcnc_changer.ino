@@ -7,7 +7,7 @@
   If the port is UART but the logic levels of the port are different than the logic levels of your Arduino, a logic level converter will be needed.
   
   The master/client port will need to be cofigured using the following settings:
-  - Baud Rate: 38400
+  - Baud Rate: 9600
   - Data Bits: 8
   - Parity: None
   - Stop Bit(s): 1
@@ -34,6 +34,30 @@
   By: C. M. Bulliner
   
 */
+
+  /*
+TODO:
+iocontrol.0.tool-change
+(Bit, Out) TRUE when a tool change is requested.
+
+iocontrol.0.tool-changed
+(Bit, In) Should be driven TRUE when a tool change is completed.
+
+iocontrol.0.tool-number
+(s32, Out) Current tool number.
+
+iocontrol.0.tool-prep-number
+(s32, Out) The number of the next tool, from the RS274NGC T-word.
+
+iocontrol.0.tool-prep-pocket
+(s32, Out) This is the pocket number (location in the tool storage mechanism) of the tool requested by the most recent T-word.
+
+iocontrol.0.tool-prepare
+(Bit, Out) TRUE when a Tn tool prepare is requested.
+
+iocontrol.0.tool-prepared
+(Bit, In) Should be driven TRUE when a tool prepare is completed.
+  */
 
 #include <ModbusRTUSlave.h>
 
@@ -91,6 +115,7 @@ void loop() {
 
 
 char coilRead(unsigned int address) {
+
   switch (address) {
     case 0:
       return digitalRead(ledPin);
