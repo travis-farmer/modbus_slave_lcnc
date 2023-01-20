@@ -13,19 +13,16 @@
 
 */
 
-  /*
-TODO:
-
-
-
-
-
-
-
-
-  */
-
 #include <ModbusRTUSlave.h>
+const float Y_Center_Spacing = 3.50;
+const float X_Center_Spacing = 3.50;
+const int Y_Num_Pockets = 10;
+const int X_Num_Pockets = 10;
+const float Y_Home_Loc = 0.00;
+const float X_Home_Loc = 0.00;
+const float Y_Change_Loc = 0.00;
+const float X_Change_Loc = 24.00;
+const float Z_Tool_Depth = 4.50;
 
 const byte id = 1;
 const unsigned long baud = 9600;
@@ -51,6 +48,69 @@ byte dutyCycle = 0;
 boolean toneActive = 0;
 unsigned int toneFrequency = 0;
 
+void GoHomeLoc() {
+    Serial2.println("G0 Z0");
+    char buffer[40];
+    sprintf(buffer, "G0 X%d Y%d", X_Home_Loc, Y_Home_Loc);
+    Serial2.println(buffer);
+}
+
+void GoChangeLoc() {
+    Serial2.println("G0 Z0");
+    char buffer[40];
+    sprintf(buffer, "G0 X%d Y%d", X_Change_Loc, Y_Change_Loc);
+    Serial2.println(buffer);
+}
+
+void GoToolLoc(int ToolNum) {
+    int PocX = 0;
+    int PocY = 0;
+    int total_pockets = (X_Num_Pockets * Y_Num_Pockets);
+    int pockets_per_line = (total_pockets / X_Num_Pockets);
+    for (int i=1; i>X_Num_Pockets; i++) {
+        if ((Y_Num_Pockets*y) > ToolNum && (Y_Num_Pockets*(y-1)) < ToolNum) {
+            PocY = ToolNum;
+            PocX = i;
+            break;
+        }
+    }
+    float PocketX = (X_Center_Spacing * ((float)PocX-1));
+    float PocketY = (Y_Center_Spacing * ((float)PocY-1));
+    Serial2.println("G0 Z0");
+    char buffer[40];
+    sprintf(buffer, "G0 X%d Y%d", PocketX, PocketY);
+    Serial2.println(buffer);
+}
+
+bool PickTool() {
+    // TODO: test if we already have tool
+    // TODO: open jaws, or assert error (return false;)
+    char buffer[40];
+    sprintf(buffer, "G0 Z%d", Z_Tool_Depth);
+    Serial2.println(buffer);
+    // TODO: test if tool there
+    // TODO: close jaws, or assert error (return false;)
+    Serial2.println("G0 Z0");
+    // TODO: test if tool still there
+    // TODO: if not, assert error (return false;)
+    // TODO: else (return true;)
+}
+
+bool PlaceTool() {
+    //TODO: test if we have a tool to place
+    //TODO: or assert error (return false;)
+    //TODO: test if pocket is empty
+    //TODO: or assert error (return false;)
+    char buffer[40];
+    sprintf(buffer, "G0 Z%d", Z_Tool_Depth);
+    Serial2.println(buffer);
+    //TODO: open jaws
+    Serial2.println("G0 Z0");
+    //TODO: do we still have the tool
+    //TODO: if so, assert error (return false;)
+    //TODO: else (return true;)
+}
+
 void setup() {
   pinMode(buttonPins[0], INPUT_PULLUP);
   pinMode(buttonPins[1], INPUT_PULLUP);
@@ -61,6 +121,7 @@ void setup() {
   pinMode(potPins[1], INPUT);
 
   Serial1.begin(baud);
+  Serial2.begin(115200);
   modbus.begin(id, baud);
   modbus.configureCoils(numCoils, coilRead, coilWrite);
   modbus.configureDiscreteInputs(numDiscreteInputs, discreteInputRead);
