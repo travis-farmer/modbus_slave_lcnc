@@ -1,11 +1,4 @@
 /*
-  ModbusRTUSlave Library - AllTogether
-  
-  This sketch demonstrates how to setup ModbusRTUSlave with 2 coils, 2 discrete inputs, 2 holding registers, and 2 input registers.
-  This sketch requires a Modbus RTU master/client device with an RS232 or UART/USART port.
-  If the port is a RS-232 port, a RS-232 to UART converter will be needed.
-  If the port is UART but the logic levels of the port are different than the logic levels of your Arduino, a logic level converter will be needed.
-  
   The master/client port will need to be cofigured using the following settings:
   - Baud Rate: 9600
   - Data Bits: 8
@@ -16,47 +9,20 @@
   - Discrete Inputs: 0 and 1
   - Holding Registers: 0 and 1
   - Input Registers: 0 and 1
-  
-  Circuit:
-  - A pushbutton switch from pin 2 to GND
-  - A pushbutton switch from pin 3 to GND
-  - Piezo speaker from pin 8 to GND
-  - LED from pin 9 to GND with appropriate series resistor
-  - TX of master/client to pin 10
-  - RX of master/client to pin 11
-  - LED from pin 13 to GND with appropriate series resistor (the built in LED will do)
-  - The center pin of a potentiometer to A0 with one end of the potentiometer connected to GND and the other to your Arduino's logic voltage (3.3 or 5V)
-  - The center pin of a potentiometer to A1 with one end of the potentiometer connected to GND and the other to your Arduino's logic voltage (3.3 or 5V)
-  
-  Created: 2022-11-19
-  By: C. M. Bulliner
-  Modified: 2022-12-17
-  By: C. M. Bulliner
-  
+
+
 */
 
   /*
 TODO:
-iocontrol.0.tool-change
-(Bit, Out) TRUE when a tool change is requested.
 
-iocontrol.0.tool-changed
-(Bit, In) Should be driven TRUE when a tool change is completed.
 
-iocontrol.0.tool-number
-(s32, Out) Current tool number.
 
-iocontrol.0.tool-prep-number
-(s32, Out) The number of the next tool, from the RS274NGC T-word.
 
-iocontrol.0.tool-prep-pocket
-(s32, Out) This is the pocket number (location in the tool storage mechanism) of the tool requested by the most recent T-word.
 
-iocontrol.0.tool-prepare
-(Bit, Out) TRUE when a Tn tool prepare is requested.
 
-iocontrol.0.tool-prepared
-(Bit, In) Should be driven TRUE when a tool prepare is completed.
+
+
   */
 
 #include <ModbusRTUSlave.h>
@@ -93,7 +59,7 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   pinMode(potPins[0], INPUT);
   pinMode(potPins[1], INPUT);
-  
+
   Serial1.begin(baud);
   modbus.begin(id, baud);
   modbus.configureCoils(numCoils, coilRead, coilWrite);
@@ -115,7 +81,7 @@ void loop() {
 
 
 char coilRead(unsigned int address) {
-
+    // mb2hal: ???
   switch (address) {
     case 0:
       return digitalRead(ledPin);
@@ -125,6 +91,15 @@ char coilRead(unsigned int address) {
 }
 
 boolean coilWrite(unsigned int address, boolean value) {
+    // mb2hal: fnct_15_write_multiple_coils
+    /*
+    iocontrol.0.tool-change
+    (Bit, Out) TRUE when a tool change is requested.
+
+    iocontrol.0.tool-prepare
+    (Bit, Out) TRUE when a Tn tool prepare is requested.
+
+    */
   switch (address) {
     case 0:
       digitalWrite(ledPin, value);
@@ -137,10 +112,29 @@ boolean coilWrite(unsigned int address, boolean value) {
 }
 
 char discreteInputRead(unsigned int address) {
+    // mb2hal: fnct_02_read_discrete_inputs
+    /*
+    iocontrol.0.tool-changed
+    (Bit, In) Should be driven TRUE when a tool change is completed.
+
+    iocontrol.0.tool-prepared
+    (Bit, In) Should be driven TRUE when a tool prepare is completed.
+    */
   return !digitalRead(buttonPins[address]);
 }
 
 long holdingRegisterRead(unsigned int address) {
+    // mb2hal: fnct_03_read_holding_registers
+    /*
+    iocontrol.0.tool-number
+    (s32, Out) Current tool number.
+
+    iocontrol.0.tool-prep-number
+    (s32, Out) The number of the next tool, from the RS274NGC T-word.
+
+    iocontrol.0.tool-prep-pocket
+    (s32, Out) This is the pocket number (location in the tool storage mechanism) of the tool requested by the most recent T-word.
+    */
   switch (address) {
     case 0:
       return dutyCycle;
@@ -150,6 +144,7 @@ long holdingRegisterRead(unsigned int address) {
 }
 
 boolean holdingRegisterWrite(word address, word value) {
+    // mb2hal: fnct_16_write_multiple_registers
   switch (address) {
     case 0:
       dutyCycle = constrain(value, 0, 255);
@@ -166,5 +161,6 @@ boolean holdingRegisterWrite(word address, word value) {
 }
 
 long inputRegisterRead(word address) {
+    // mb2hal: fnct_04_read_input_registers
   return analogRead(potPins[address]);
 }
