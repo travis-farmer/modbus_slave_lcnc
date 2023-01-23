@@ -13,12 +13,15 @@
 
 LiquidCrystal_I2C lcd(0x27,40,2);
 
-const byte id = 1;
 const int dePin = 12;
+const int MacStatusPin = 22;
+const int MacIsDonePin = 23;
+
+const byte id = 1;
 const unsigned long baud = 9600;
 const unsigned int bufSize = 256;
 
-const unsigned int numCoils = 1;
+const unsigned int numCoils = 2;
 const unsigned int numDiscreteInputs = 1;
 const unsigned int numHoldingRegisters = 1;
 const unsigned int numInputRegisters = 16;
@@ -28,6 +31,11 @@ String GRBLreturn = "";
 String gblGRBLstatus = "";
 int gblToolOut = 0;
 int gblToolIn = 0;
+bool gblChangeRequested = false;
+bool gblPrepareRequested = false;
+char gblChangeReady = '0';
+char gblPrepareReady = '0';
+
 bool GRBLinErr = false;
 bool GRBLisHoming = false;
 long gblStatus = 0;
@@ -35,10 +43,6 @@ int macStatus = 0;
 
 byte buf[bufSize];
 ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
-
-void setMachine(word stat) {
-    macStatus = (int)stat;
-}
 
 void parseGRBL(String inStr) {
     gblGRBLstatus = inStr;
@@ -105,6 +109,9 @@ void setup() {
   modbus.configureDiscreteInputs(numDiscreteInputs, discreteInputRead);
   modbus.configureHoldingRegisters(numHoldingRegisters, holdingRegisterRead, holdingRegisterWrite);
   modbus.configureInputRegisters(numInputRegisters, inputRegisterRead);
+
+  pinMode(MacStatusPin,INPUT_PULLUP);
+  pinMode(MacIsDonePin,INPUT_PULLUP);
 }
 
 void loop() {
@@ -114,7 +121,7 @@ void loop() {
   if ((timTimer - lastDispTim) >= 1000) {
     lastDispTim = timTimer;
     Disp();
-    
+
   }
   if (Serial2.available() > 0) {
     // get incoming byte:
@@ -127,17 +134,42 @@ void loop() {
         GRBLreturn += inChar;
     }
   }
+  if (gblChangeRequested == true && gblToolIn > 0) {
+    //TODO: move transfer arm into change location (if not already)
+    gblChangeReady = '1';
+    gblChangeRequested = false;
+    while(digitalRead(MacIsDonePin) == HIGH) {
+        //DWELL until machine is done loading tool into tool in pocket and taking tool from tool out pocket
+    }
+    //TODO: move transfer arm back to mag
+  }
+  if (gblPrepareRequested == true && gblToolOut > 0) {
+    //TODO: grab tool from magazine, and load tool into transfer arm, tool out pocket
+    gblPrepareReady = '1';
+    gblPrepareRequested = false;
+  }
+  if ()
+
+  // poll machine status input pin
+  macStatus = digitalRead(MacStatusPin);
 }
 
 
 
 char coilRead(unsigned int address) {
-    // mb2hal: ???
-
+    // mb2hal: fnct_01_read_coils
+    switch(address) {
+    case 0:
+        return gblChangeReady;
+        break;
+    case 1:
+        return gblPrepareReady;
+        break;
+    }
 }
 
 boolean coilWrite(unsigned int address, boolean value) {
-    // mb2hal: fnct_15_write_multiple_coils
+    // mb2hal: fnct_05_write_single_coil
     /*
     iocontrol.0.tool-change
     (Bit, Out) TRUE when a tool change is requested.
@@ -146,7 +178,14 @@ boolean coilWrite(unsigned int address, boolean value) {
     (Bit, Out) TRUE when a Tn tool prepare is requested.
 
     */
-
+    switch(address) {
+    case 0:
+        gblChangeRequested = value;
+        break;
+    case 1:
+        gblPrepareRequested = value;
+        break;
+    }
   return true;
 }
 
@@ -176,7 +215,10 @@ boolean holdingRegisterWrite(word address, word value) {
     */
     switch(address) {
     case 0:
-        setMachine(value);
+        gblToolIn = value;
+        break;
+    case 1:
+        gblToolOut = value;
         break;
     }
   return true;
