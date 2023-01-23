@@ -14,12 +14,13 @@
 LiquidCrystal_I2C lcd(0x27,40,2);
 
 const byte id = 1;
+const int dePin = 12;
 const unsigned long baud = 9600;
 const unsigned int bufSize = 256;
 
-const unsigned int numCoils = 3;
-const unsigned int numDiscreteInputs = 3;
-const unsigned int numHoldingRegisters = 3;
+const unsigned int numCoils = 1;
+const unsigned int numDiscreteInputs = 1;
+const unsigned int numHoldingRegisters = 1;
 const unsigned int numInputRegisters = 16;
 
 unsigned long lastDispTim = 0UL;
@@ -83,11 +84,11 @@ void homeGRBL() {
 void Disp() {
     lcd.clear();
     char buffer[40];
-    sprintf(buffer, "Tool Out: %d Tool In: %d", gblToolOut, gblToolIn);
+    sprintf(buffer, "LCNC: %d Tool Out: %d Tool In: %d", macStatus, gblToolOut, gblToolIn);
     lcd.setCursor(0,0);
     lcd.print(buffer);
     char bufferb[40];
-    sprintf(bufferb, "GRBL: %s", gblGRBLstatus);
+    sprintf(bufferb, "GRBL: %d", gblStatus);
     lcd.setCursor(0,1);
     lcd.print(bufferb);
 
@@ -113,7 +114,7 @@ void loop() {
   if ((timTimer - lastDispTim) >= 1000) {
     lastDispTim = timTimer;
     Disp();
-    SetupStatus();
+    
   }
   if (Serial2.available() > 0) {
     // get incoming byte:
