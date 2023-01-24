@@ -1,12 +1,14 @@
-/*
-  The master/client port will need to be configured using the following settings:
-  - Baud Rate: 9600
-  - Data Bits: 8
-  - Parity: None
-  - Stop Bit(s): 1
-  - Slave/Server ID: 1
-*/
+/********************************************//**
+ * \brief Arduino ModBus project, controlling a automatic tool changer.
+ * The master/client port will need to be configured using the following settings:
+ * Baud Rate: 9600
+ * Data Bits: 8
+ * Parity: None
+ * Stop Bit(s): 1
+ * Slave/Server ID: 1
+ ***********************************************/
 
+#include "version.h"
 #include <ModbusRTUSlave.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -44,6 +46,13 @@ int macStatus = 0;
 byte buf[bufSize];
 ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
 
+/********************************************//**
+ * \brief try to parse the return from GRBL
+ *
+ * \param inStr String
+ * \return void
+ *
+ ***********************************************/
 void parseGRBL(String inStr) {
     gblGRBLstatus = inStr;
     Disp();
@@ -59,6 +68,14 @@ void parseGRBL(String inStr) {
     }
 }
 
+/********************************************//**
+ * \brief move GRBL to an X-Y location
+ *
+ * \param X float
+ * \param Y float
+ * \return void
+ *
+ ***********************************************/
 void goXY(float X, float Y) {
     // these are rapid moves. get there as fast as possible.
     char buffX[30];
@@ -69,6 +86,15 @@ void goXY(float X, float Y) {
     sprintf(buffer, "G0 X%s Y%s", buffX, buffY);
     Serial2.println(buffer);
 }
+
+/********************************************//**
+ * \brief Move GRBL to a Z location
+ *
+ * \param Z float
+ * \param F float
+ * \return void
+ *
+ ***********************************************/
 void goZ(float Z, float F) {
     // feed rate move, allows Z to move more controlled.
     char buffZ[30];
@@ -80,11 +106,23 @@ void goZ(float Z, float F) {
     Serial2.println(buffer);
 }
 
+/********************************************//**
+ * \brief Home the GRBL axis
+ *
+ * \return void
+ *
+ ***********************************************/
 void homeGRBL() {
     Serial2.println("$H");
     GRBLisHoming = true;
 }
 
+/********************************************//**
+ * \brief Display status on a 4002 I2C LCD
+ *
+ * \return void
+ *
+ ***********************************************/
 void Disp() {
     lcd.clear();
     char buffer[40];
@@ -92,12 +130,18 @@ void Disp() {
     lcd.setCursor(0,0);
     lcd.print(buffer);
     char bufferb[40];
-    sprintf(bufferb, "GRBL: %d", gblStatus);
+    sprintf(bufferb, "ModBus Tool Changer V%d.%d.%d %s", AutoVersion.MAJOR, AutoVersion.MINOR, AutoVersion.REVISION, AutoVersion.STATUS);
     lcd.setCursor(0,1);
     lcd.print(bufferb);
 
 }
 
+/********************************************//**
+ * \brief Arduino Setup
+ *
+ * \return void
+ *
+ ***********************************************/
 void setup() {
   lcd.init();                      // initialize the lcd
   lcd.backlight();
@@ -114,6 +158,12 @@ void setup() {
   pinMode(MacIsDonePin,INPUT_PULLUP);
 }
 
+/********************************************//**
+ * \brief Arduino Loop
+ *
+ * \return void
+ *
+ ***********************************************/
 void loop() {
   modbus.poll();
 
@@ -156,6 +206,13 @@ void loop() {
 
 
 
+/********************************************//**
+ * \brief ModBus Coil Read handle
+ *
+ * \param address unsigned int
+ * \return char
+ *
+ ***********************************************/
 char coilRead(unsigned int address) {
     // mb2hal: fnct_01_read_coils
     switch(address) {
@@ -168,6 +225,14 @@ char coilRead(unsigned int address) {
     }
 }
 
+/********************************************//**
+ * \brief ModBus Coil Write Handle
+ *
+ * \param address unsigned int
+ * \param value boolean
+ * \return boolean
+ *
+ ***********************************************/
 boolean coilWrite(unsigned int address, boolean value) {
     // mb2hal: fnct_05_write_single_coil
     /*
@@ -189,11 +254,25 @@ boolean coilWrite(unsigned int address, boolean value) {
   return true;
 }
 
+/********************************************//**
+ * \brief ModBus Discrete Input Read Handle
+ *
+ * \param address unsigned int
+ * \return char
+ *
+ ***********************************************/
 char discreteInputRead(unsigned int address) {
     // mb2hal: fnct_02_read_discrete_inputs
 
 }
 
+/********************************************//**
+ * \brief ModBus Holding Register Read Handle
+ *
+ * \param address unsigned int
+ * \return long
+ *
+ ***********************************************/
 long holdingRegisterRead(unsigned int address) {
     // mb2hal: fnct_03_read_holding_registers
     switch(address) {
@@ -204,6 +283,14 @@ long holdingRegisterRead(unsigned int address) {
     }
 }
 
+/********************************************//**
+ * \brief ModBus Holding Register Write Handle
+ *
+ * \param address word
+ * \param value word
+ * \return boolean
+ *
+ ***********************************************/
 boolean holdingRegisterWrite(word address, word value) {
     // mb2hal: fnct_16_write_multiple_registers
     /*
@@ -224,6 +311,13 @@ boolean holdingRegisterWrite(word address, word value) {
   return true;
 }
 
+/********************************************//**
+ * \brief ModBus Input Register Read Handle
+ *
+ * \param address word
+ * \return long
+ *
+ ***********************************************/
 long inputRegisterRead(word address) {
     // mb2hal: fnct_04_read_input_registers
   return analogRead(address);
