@@ -23,20 +23,31 @@ const byte id = 1;
 const unsigned long baud = 9600;
 const unsigned int bufSize = 256;
 
-const unsigned int numCoils = 2;
+const unsigned int numCoils = 3;
 const unsigned int numDiscreteInputs = 1;
-const unsigned int numHoldingRegisters = 1;
+const unsigned int numHoldingRegisters = 2;
 const unsigned int numInputRegisters = 16;
 
 unsigned long lastDispTim = 0UL;
+unsigned long lastWatchDog = 0UL;
+
 String GRBLreturn = "";
 String gblGRBLstatus = "";
 int gblToolOut = 0;
 int gblToolIn = 0;
+int gblDwellStatus = 0;
+
+unsigned int gblErrorCode = 0;
+unsigned int gblLastDispPage = 0;
+
 bool gblChangeRequested = false;
 bool gblPrepareRequested = false;
+bool feedWatchDog = false;
+bool oldWatchDog = false;
+
 char gblChangeReady = '0';
 char gblPrepareReady = '0';
+char WatchDogStatus = '0';
 
 bool GRBLinErr = false;
 bool GRBLisHoming = false;
@@ -126,11 +137,26 @@ void homeGRBL() {
 void Disp() {
     lcd.clear();
     char buffer[40];
-    sprintf(buffer, "LCNC: %d Tool Out: %d Tool In: %d", macStatus, gblToolOut, gblToolIn);
+    sprintf(buffer, "LCNC: %d Tool Out: %d Tool In: %d DW: %d", macStatus, gblToolOut, gblToolIn, gblDwellStatus);
     lcd.setCursor(0,0);
     lcd.print(buffer);
+
     char bufferb[40];
-    sprintf(bufferb, "ModBus Tool Changer V%d.%d.%d %s", AutoVersion.MAJOR, AutoVersion.MINOR, AutoVersion.REVISION, AutoVersion.STATUS);
+    switch(gblLastDispPage) {
+    case 0:
+        sprintf(bufferb, "ModBus ATC Mag v%s %s", AutoVersion::FULLVERSION_STRING, AutoVersion::STATUS);
+        break;
+    case 1:
+        String tmpStr = "";
+        tmpStr = String(gblErrorCode,HEX);
+        char bufferErr[8];
+        tmpStr.toCharArray(bufferErr, 8);
+        sprintf(bufferb, "Error: 0x%sH", bufferErr);
+        break;
+
+    }
+    gblLastDispPage++;
+    if (gblLastDispPage > 1) {gblLastDispPage = 0;}
     lcd.setCursor(0,1);
     lcd.print(bufferb);
 
@@ -168,11 +194,23 @@ void loop() {
   modbus.poll();
 
   unsigned long timTimer = millis();
-  if ((timTimer - lastDispTim) >= 1000) {
+  if ((timTimer - lastDispTim) >= 1500) {
     lastDispTim = timTimer;
     Disp();
 
   }
+
+  if (oldWatchDog != feedWatchDog && (timTimer - lastWatchDog) < 1000) {
+    // watchdog not starving
+    oldWatchDog = feedWatchDog;
+    lastWatchDog = timTimer;
+    WatchDogStatus = '0';
+  } else if ((timTimer - lastWatchDog) >= 1000){
+    // watchdog starving, hasn't eaten in over 1000ms
+    WatchDogStatus = '1';
+    macStatus = 0; // Machine is lost
+  }
+
   if (Serial2.available() > 0) {
     // get incoming byte:
     char inChar = Serial2.read();
@@ -189,19 +227,23 @@ void loop() {
     gblChangeReady = '1';
     gblChangeRequested = false;
     while(digitalRead(MacIsDonePin) == HIGH) {
-        //DWELL until machine is done loading tool into tool in pocket and taking tool from tool out pocket
+        //DWELL until machine is done loading tool into tool-in pocket and taking tool from tool-out pocket
+        gblDwellStatus = 1;
     }
+    gblDwellStatus = 0;
     //TODO: move transfer arm back to mag
   }
   if (gblPrepareRequested == true && gblToolOut > 0) {
     //TODO: grab tool from magazine, and load tool into transfer arm, tool out pocket
+    //TODO: remove tool from tool-in pocket, and move back to mag
     gblPrepareReady = '1';
     gblPrepareRequested = false;
+
   }
-  if ()
+
 
   // poll machine status input pin
-  macStatus = digitalRead(MacStatusPin);
+  //macStatus = !digitalRead(MacStatusPin);
 }
 
 
@@ -222,6 +264,8 @@ char coilRead(unsigned int address) {
     case 1:
         return gblPrepareReady;
         break;
+    case 2:
+        return WatchDogStatus;
     }
 }
 
@@ -249,6 +293,9 @@ boolean coilWrite(unsigned int address, boolean value) {
         break;
     case 1:
         gblPrepareRequested = value;
+        break;
+    case 2:
+        feedWatchDog = value;
         break;
     }
   return true;
