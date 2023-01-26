@@ -1,0 +1,6 @@
+26 January 2023
+   released version 1.0.2 of modbus_slave_lcnc_changer
+
+     Change log:
+        -Added: Started this change log
+

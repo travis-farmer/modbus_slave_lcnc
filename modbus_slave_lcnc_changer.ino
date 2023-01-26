@@ -52,7 +52,7 @@ void Disp() {
     lcd.print(buffer);
     lcd.setCursor(0,1);
     char bufferB[40];
-    sprintf(bufferB, "IP: %s", Ethernet.localIP());
+    //sprintf(bufferB, "IP: %s", Ethernet.localIP());
     lcd.print(bufferB);
 
 
