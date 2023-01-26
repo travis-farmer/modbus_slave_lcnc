@@ -10,7 +10,19 @@
 
 #include "version.h"
 #include <ModbusRTUSlave.h>
+#include <SPI.h>
+#include <Ethernet.h>
+#include <PubSubClient.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
+LiquidCrystal_I2C lcd(0x27,40,2);
+
+// Update these with values suitable for your hardware/network.
+byte mac[]    = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xEE };
+IPAddress server(10, 150, 86, 185);
+IPAddress ip(192, 168, 0, 29);
+IPAddress myDns(192, 168, 0, 1);
 
 const int dePin = 12;
 
@@ -32,21 +44,71 @@ bool oldWatchDog = false;
 char WatchDogStatus = '0';
 
 int macStatus = 0;
+int EthStat = 0;
+
 
 byte buf[bufSize];
 ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
 
 /********************************************//**
- * \brief Display status on a Nextion TFT
+ * \brief PubSubClient callback
+ *
+ * \param topic char*
+ * \param payload char*
+ * \param length unsigned int
+ * \return void
+ *
+ ***********************************************/
+void callback(char* topic, char* payload, unsigned int length) {
+  //Serial.print(topic);
+  //Serial.print(":");
+  for (int i=0; i< length; i++) {
+    //Serial.print(payload[i]);
+  }
+  //Serial.print(":");
+  //Serial.println(length);
+}
+
+EthernetClient eClient;
+PubSubClient client(eClient);
+
+long lastReconnectAttempt = 0;
+
+/********************************************//**
+ * \brief Auto Reconnect
+ *
+ * \return boolean
+ *
+ ***********************************************/
+boolean reconnect() {
+  if (client.connect("arduinoClient")) {
+    Disp();
+    EthStat = 0;
+
+  }
+  return client.connected();
+}
+
+/********************************************//**
+ * \brief Display status on a LCD and PubSubClient
  *
  * \return void
  *
  ***********************************************/
 void Disp() {
     char buffer[40];
-    sprintf(buffer, "LCNC: %d Tool Out: %d Tool In: %d DW: %d", macStatus, gblToolOut, gblToolIn, gblDwellStatus);
+    lcd.setCursor(0,0);
+    sprintf(buffer, "LCNC: %d Eth: %d", macStatus, EthStat);
     lcd.print(buffer);
+    lcd.setCursor(0,1);
+    char bufferB[40];
 
+    sprintf(bufferB, "IP: %s", Ethernet.localIP());
+    lcd.print(bufferB);
+
+    char sz[32];
+    sprintf(sz, "%d", macStatus);
+    client.publish("lcnc/macstatus",sz);
 }
 
 /********************************************//**
@@ -58,6 +120,29 @@ void Disp() {
 void setup() {
   lcd.init();                      // initialize the lcd
   lcd.backlight();
+
+  client.setServer(server, 1883);
+  client.setCallback(callback);
+ //Serial.println("Initialize Ethernet with DHCP:");
+  if (Ethernet.begin(mac) == 0) {
+    //Serial.println("Failed to configure Ethernet using DHCP");
+    // Check for Ethernet hardware present
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      //Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+      EthStat = 1;
+    }
+    if (Ethernet.linkStatus() == LinkOFF) {
+      //Serial.println("Ethernet cable is not connected.");
+      EthStat = 2;
+    }
+    // try to congifure using IP address instead of DHCP:
+    Ethernet.begin(mac, ip, myDns);
+  } else {
+    //Serial.print("  DHCP assigned IP ");
+    //Serial.println(Ethernet.localIP());
+  }
+  delay(1500);
+  lastReconnectAttempt = 0;
 
   Serial1.begin(baud);
   Serial2.begin(115200);
@@ -82,6 +167,21 @@ void loop() {
     lastDispTim = timTimer;
     Disp();
 
+  }
+
+  if (!client.connected()) {
+    long now = millis();
+    if (now - lastReconnectAttempt > 5000) {
+      lastReconnectAttempt = now;
+      // Attempt to reconnect
+      if (reconnect()) {
+        lastReconnectAttempt = 0;
+      }
+    }
+  } else {
+    // Client connected
+
+    client.loop();
   }
 
   if (oldWatchDog != feedWatchDog && (timTimer - lastWatchDog) < 1000) {
