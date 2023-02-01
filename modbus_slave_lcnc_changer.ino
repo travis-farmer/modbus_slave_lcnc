@@ -21,7 +21,7 @@ const byte id = 1;
 const unsigned long baud = 9600;
 const unsigned int bufSize = 256;
 
-const unsigned int numCoils = 1;
+const unsigned int numCoils = 11;
 const unsigned int numDiscreteInputs = 1;
 const unsigned int numHoldingRegisters = 2;
 const unsigned int numInputRegisters = 16;
@@ -40,7 +40,7 @@ byte buf[bufSize];
 ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
 
 /**
- * \brief Display status on a LCD and PubSubClient
+ * \brief Display status on a LCD
  *
  * \return void
  *
@@ -48,7 +48,7 @@ ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
 void Disp() {
     char buffer[40];
     lcd.setCursor(0,0);
-    sprintf(buffer, "LCNC: %d Eth: %d", macStatus, EthStat);
+    sprintf(buffer, "LCNC: %d", macStatus);
     lcd.print(buffer);
     lcd.setCursor(0,1);
     char bufferB[40];
@@ -75,6 +75,9 @@ void setup() {
   modbus.configureDiscreteInputs(numDiscreteInputs, discreteInputRead);
   modbus.configureHoldingRegisters(numHoldingRegisters, holdingRegisterRead, holdingRegisterWrite);
   modbus.configureInputRegisters(numInputRegisters, inputRegisterRead);
+  for (int i = 22; i <= 31; i++) {
+    pinMode(i,INPUT_PULLUP);
+  }
 }
 
 /**
@@ -121,6 +124,37 @@ char coilRead(unsigned int address) {
     case 0:
         return WatchDogStatus;
         break;
+    case 1: // BEGIN Tool Pocket Sensors
+        return digitalRead(22)? 0:1;
+        break;
+    case 2:
+        return digitalRead(23)? 0:1;
+        break;
+    case 3:
+        return digitalRead(24)? 0:1;
+        break;
+    case 4:
+        return digitalRead(25)? 0:1;
+        break;
+    case 5:
+        return digitalRead(26)? 0:1;
+        break;
+    case 6:
+        return digitalRead(27)? 0:1;
+        break;
+    case 7:
+        return digitalRead(28)? 0:1;
+        break;
+    case 8:
+        return digitalRead(29)? 0:1;
+        break;
+    case 9:
+        return digitalRead(30)? 0:1;
+        break;
+    case 10:
+        return digitalRead(31)? 0:1;
+        break; // END Tool Pocket Sensors
+
     }
 }
 
@@ -139,6 +173,10 @@ boolean coilWrite(unsigned int address, boolean value) {
     case 0:
         feedWatchDog = value;
         break;
+    case 1:
+        // do nothing yet
+        break;
+
     }
   return true;
 }
