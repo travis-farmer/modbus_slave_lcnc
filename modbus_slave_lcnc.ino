@@ -10,6 +10,23 @@
 
 #include "version.h"
 #include <ModbusRTUSlave.h>
+#include <SPI.h>
+#include <Ethernet.h>
+#include "arduino_secrets.h"
+#include <PubSubClient.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <Adafruit_ADS1X15.h>
+
+// Update these with values suitable for your hardware/network.
+byte mac[]    = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xED };
+IPAddress server(10, 150, 86, 185);
+IPAddress ip(192, 168, 0, 29);
+IPAddress myDns(192, 168, 0, 1);
+
+LiquidCrystal_I2C lcd(0x27,40,2);
+
+Adafruit_ADS1115 ads;
 
 const int dePin = 12;
 
@@ -22,12 +39,56 @@ const unsigned int numDiscreteInputs = 1;
 const unsigned int numHoldingRegisters = 10;
 const unsigned int numInputRegisters = 16;
 
+const int PSIaPin=0;
+const int PSIbPin=1;
+const int PSIcPin=2;
+
 unsigned long lastDispTim = 0UL;
 unsigned long lastWatchDog = 0UL;
 
 
 byte buf[bufSize];
 ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
+
+void callback(char* topic, char* payload, unsigned int length) {
+  //Serial.print(topic);
+  //Serial.print(":");
+  for (int i=0; i< length; i++) {
+    //Serial.print(payload[i]);
+  }
+  //Serial.print(":");
+  //Serial.println(length);
+}
+
+EthernetClient eClient;
+PubSubClient client(eClient);
+
+unsigned long lastReconnectAttempt = 0UL;
+
+void Disp() {
+    int PSIa = (int)map(((5/1024)*(float)analogRead(PSIaPin)),0.50,4.50,0.00,150.00);
+    int PSIb = (int)map(((5/1024)*(float)analogRead(PSIbPin)),0.50,4.50,0.00,150.00);
+
+    char sz[32];
+    sprintf(sz, "%d", PSIa);
+    client.publish("lcnc/psia",sz);
+    sprintf(sz, "%d", PSIb);
+    client.publish("lcnc/psib",sz);
+
+
+}
+
+boolean reconnect() {
+  if (client.connect("arduinoClient")) {
+    // Once connected, publish an announcement...
+    // client.publish("test/outTopic","testing");
+    // ... and resubscribe
+    // client.subscribe("generator/Monitor/Platform_Stats/System_Uptime");
+    Disp();
+
+  }
+  return client.connected();
+}
 
 /**
  * \brief Arduino Setup
@@ -36,21 +97,51 @@ ModbusRTUSlave modbus(Serial1, buf, bufSize, dePin);
  *
  */
 void setup() {
-  Serial1.begin(baud);
-  modbus.begin(id, baud);
-  modbus.configureCoils(numCoils, coilRead, coilWrite);
-  modbus.configureDiscreteInputs(numDiscreteInputs, discreteInputRead);
-  modbus.configureHoldingRegisters(numHoldingRegisters, holdingRegisterRead, holdingRegisterWrite);
-  modbus.configureInputRegisters(numInputRegisters, inputRegisterRead);
-  for (int i = 22; i <= 31; i++) {
-    pinMode(i,INPUT_PULLUP);
-  }
-  for (int j = 32; j <= 41; j++) {
-    pinMode(j,OUTPUT);
-  }
-  for (int k = 2; k <= 11; k++) {
-    pinMode(k,OUTPUT);
-  }
+    WiFi.setPins(8,7,4); // CS, IRQ, RST
+    Serial1.begin(baud);
+    modbus.begin(id, baud);
+    modbus.configureCoils(numCoils, coilRead, coilWrite);
+    modbus.configureDiscreteInputs(numDiscreteInputs, discreteInputRead);
+    modbus.configureHoldingRegisters(numHoldingRegisters, holdingRegisterRead, holdingRegisterWrite);
+    modbus.configureInputRegisters(numInputRegisters, inputRegisterRead);
+    ads.begin()
+
+    for (int i = 22; i <= 31; i++) {
+        pinMode(i,INPUT_PULLUP);
+    }
+    for (int j = 32; j <= 41; j++) {
+        pinMode(j,OUTPUT);
+    }
+    for (int k = 2; k <= 11; k++) {
+        pinMode(k,OUTPUT);
+    }
+    client.setServer(server, 1883);
+    client.setCallback(callback);
+    char buffer[40];
+    if (Ethernet.begin(mac) == 0) {
+        //Serial.println("Failed to configure Ethernet using DHCP");
+        // Check for Ethernet hardware present
+        if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+            //Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+            lcd.setCursor(0,1);
+            sprintf(buffer, "No Hardware");
+            lcd.print(buffer);
+        }
+        if (Ethernet.linkStatus() == LinkOFF) {
+            //Serial.println("Ethernet cable is not connected.");
+            lcd.setCursor(0,1);
+            sprintf(buffer, "Cable Unplugged");
+            lcd.print(buffer);
+        }
+    } else {
+        //Serial.print("  DHCP assigned IP ");
+        //Serial.println(Ethernet.localIP());
+        lcd.setCursor(0,1);
+        sprintf(buffer, "IP: %s (DHCP)", Ethernet.localIP());
+        lcd.print(buffer);
+    }
+
+    lastReconnectAttempt = 0;
 }
 
 /**
@@ -60,8 +151,25 @@ void setup() {
  *
  */
 void loop() {
-  modbus.poll();
+    modbus.poll();
+    unsigned long now = millis();
+    if (!client.connected()) {
+        if (now - lastReconnectAttempt > 5000UL) {
+            lastReconnectAttempt = now;
+            // Attempt to reconnect
+            if (reconnect()) {
+                lastReconnectAttempt = 0UL;
+            }
+        }
+    } else {
+        // Client connected
 
+        client.loop();
+    }
+    if (now-lastDispTim > 1000) {
+        lastDispTim = now;
+        Disp();
+    }
 }
 
 
@@ -179,7 +287,7 @@ char discreteInputRead(unsigned int address) {
  */
 long holdingRegisterRead(unsigned int address) {
     // mb2hal: fnct_03_read_holding_registers
-
+    return ads.readADC_SingleEnded(address);
 }
 
 /**
